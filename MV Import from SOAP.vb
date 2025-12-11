@@ -166,7 +166,7 @@ Public Function ProcessWebServiceRequest(requestItem As System.Dynamic.ExpandoOb
                                 If String.IsNullOrEmpty(childEl.Value) Then
                                     row(columnName) = System.DBNull.Value
                                 Else
-                                    row(columnName) = childEl.Value.ToString()
+                                    row(columnName) = childEl.Value.ToString().Trim()
                                 End If
                             End If
 
@@ -180,7 +180,7 @@ Public Function ProcessWebServiceRequest(requestItem As System.Dynamic.ExpandoOb
                                         If String.IsNullOrEmpty(attr.Value) Then
                                             row(attrColName) = System.DBNull.Value
                                         Else
-                                            row(attrColName) = attr.Value.ToString()
+                                            row(attrColName) = attr.Value.ToString().Trim()
                                         End If
                                     End If
                                     attrIndex += 1
@@ -221,7 +221,7 @@ Public Function ProcessWebServiceRequest(requestItem As System.Dynamic.ExpandoOb
                         For Each col As System.Data.DataColumn In t.Columns
                             Dim element As System.Xml.Linq.XElement = el.Element(col.ColumnName)
                             If element IsNot Nothing AndAlso Not String.IsNullOrEmpty(element.Value) Then
-                                row(col.ColumnName) = element.Value.ToString()
+                                row(col.ColumnName) = element.Value.ToString().Trim()
                             Else
                                 row(col.ColumnName) = System.DBNull.Value
                             End If
