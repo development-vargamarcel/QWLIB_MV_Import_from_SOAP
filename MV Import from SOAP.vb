@@ -91,17 +91,36 @@ Public Function ProcessWebServiceRequest(requestItem As System.Dynamic.ExpandoOb
         Else
             Dim firstItem As System.Xml.Linq.XElement = itemElements.First()
             Dim childElements As System.Collections.Generic.List(Of System.Xml.Linq.XElement) = firstItem.Elements().ToList()
-            
+
+            ' Check if columns are explicitly defined in requestItem
+            Dim useExplicitColumns As Boolean = requestItemDict.ContainsKey("columns") AndAlso requestItemDict("columns") IsNot Nothing
+            Dim explicitColumns As System.Collections.Generic.List(Of String) = Nothing
+
+            If useExplicitColumns Then
+                ' Convert columns to list of strings
+                Dim columnsObj As Object = requestItemDict("columns")
+                If TypeOf columnsObj Is System.Collections.IEnumerable AndAlso Not TypeOf columnsObj Is String Then
+                    explicitColumns = New System.Collections.Generic.List(Of String)()
+                    For Each col As Object In DirectCast(columnsObj, System.Collections.IEnumerable)
+                        explicitColumns.Add(col.ToString())
+                    Next
+                    Log("`Info: Using explicit columns from requestItem.columns: " & String.Join(", ", explicitColumns))
+                Else
+                    Log("`Warning: columns property exists but is not a valid collection, ignoring")
+                    useExplicitColumns = False
+                End If
+            End If
+
             If childElements.Count = 0 Then
                 Log("`Warning: First item has no child elements")
             Else
                 ' Check if this is a repeated-element structure
                 Dim isRepeatedElement As Boolean = False
                 Dim uniqueChildNames As System.Collections.Generic.HashSet(Of String) = New System.Collections.Generic.HashSet(Of String)(childElements.Select(Function(el As System.Xml.Linq.XElement) el.Name.ToString()))
-                
+
                 ' It's repeated if there's only one unique child element name and more than one occurrence
                 isRepeatedElement = (uniqueChildNames.Count = 1 AndAlso childElements.Count >= 1)
-                
+
                 If isRepeatedElement Then
                     Log("`Info: Repeated tag mode. Only one unique child element name and more than one occurrence.")
                     ' Handle repeated element structure (like Serial tags)
@@ -160,16 +179,29 @@ Public Function ProcessWebServiceRequest(requestItem As System.Dynamic.ExpandoOb
                     Next
                 Else
                     ' Handle standard structure (different child elements = columns)
-                    ' Build columns from first item
-                    For Each f As System.Xml.Linq.XElement In childElements
-                        If Not t.Columns.Contains(f.Name.ToString()) Then
-                            c = New System.Data.DataColumn
-                            c.ColumnName = f.Name.ToString()
-                            c.MaxLength = 500
-                            t.Columns.Add(c)
-                        End If
-                    Next
-                    
+                    ' Build columns from explicit list or from first item
+                    If useExplicitColumns Then
+                        ' Use explicitly defined columns
+                        For Each colName As String In explicitColumns
+                            If Not t.Columns.Contains(colName) Then
+                                c = New System.Data.DataColumn
+                                c.ColumnName = colName
+                                c.MaxLength = 500
+                                t.Columns.Add(c)
+                            End If
+                        Next
+                    Else
+                        ' Auto-detect columns from first item
+                        For Each f As System.Xml.Linq.XElement In childElements
+                            If Not t.Columns.Contains(f.Name.ToString()) Then
+                                c = New System.Data.DataColumn
+                                c.ColumnName = f.Name.ToString()
+                                c.MaxLength = 500
+                                t.Columns.Add(c)
+                            End If
+                        Next
+                    End If
+
                     ' Process each item as a row
                     For Each el As System.Xml.Linq.XElement In itemElements
                         row = t.NewRow
