@@ -125,55 +125,68 @@ Public Function ProcessWebServiceRequest(requestItem As System.Dynamic.ExpandoOb
                     Log("`Info: Repeated tag mode. Only one unique child element name and more than one occurrence.")
                     ' Handle repeated element structure (like Serial tags)
                     Dim columnName As String = childElements(0).Name.ToString()
-                    
+
                     ' Add attributes from parent as columns first (to avoid name conflicts)
                     Dim attributeNames As New System.Collections.Generic.List(Of String)
                     For Each attr As System.Xml.Linq.XAttribute In firstItem.Attributes()
                         Dim attrName As String = attr.Name.ToString()
-                        
+
                         ' Handle attribute name conflict with element name
                         If attrName = columnName Then
                             attrName = attrName & "_Attr"
                             Log("`Warning: Attribute name '" & attr.Name.ToString() & "' conflicts with element name, renamed to '" & attrName & "'")
                         End If
-                        
-                        attributeNames.Add(attrName)
+
+                        ' Only add attribute column if not using explicit columns, or if it's in the explicit list
+                        If Not useExplicitColumns OrElse explicitColumns.Contains(attrName) Then
+                            attributeNames.Add(attrName)
+                            c = New System.Data.DataColumn
+                            c.ColumnName = attrName
+                            c.MaxLength = 500
+                            t.Columns.Add(c)
+                        End If
+                    Next
+
+                    ' Add the repeated element column only if not using explicit columns, or if it's in the explicit list
+                    If Not useExplicitColumns OrElse explicitColumns.Contains(columnName) Then
                         c = New System.Data.DataColumn
-                        c.ColumnName = attrName
+                        c.ColumnName = columnName
                         c.MaxLength = 500
                         t.Columns.Add(c)
-                    Next
-                    
-                    ' Add the repeated element column
-                    c = New System.Data.DataColumn
-                    c.ColumnName = columnName
-                    c.MaxLength = 500
-                    t.Columns.Add(c)
+                    End If
                     
                     ' Process each item container
                     For Each itemEl As System.Xml.Linq.XElement In itemElements
                         ' Each repeated child element becomes a row
                         For Each childEl As System.Xml.Linq.XElement In itemEl.Elements()
                             row = t.NewRow
-                            
-                            ' Set element value (handle empty/null)
-                            If String.IsNullOrEmpty(childEl.Value) Then
-                                row(columnName) = System.DBNull.Value
-                            Else
-                                row(columnName) = childEl.Value.ToString()
+
+                            ' Set element value (handle empty/null) - only if column exists in table
+                            If t.Columns.Contains(columnName) Then
+                                If String.IsNullOrEmpty(childEl.Value) Then
+                                    row(columnName) = System.DBNull.Value
+                                Else
+                                    row(columnName) = childEl.Value.ToString()
+                                End If
                             End If
-                            
-                            ' Copy parent attributes to each row
+
+                            ' Copy parent attributes to each row - only for columns that exist
                             Dim attrIndex As Integer = 0
                             For Each attr As System.Xml.Linq.XAttribute In itemEl.Attributes()
-                                If String.IsNullOrEmpty(attr.Value) Then
-                                    row(attributeNames(attrIndex)) = System.DBNull.Value
-                                Else
-                                    row(attributeNames(attrIndex)) = attr.Value.ToString()
+                                ' Check if this attribute was added to the attributeNames list (meaning it passed the filter)
+                                If attrIndex < attributeNames.Count Then
+                                    Dim attrColName As String = attributeNames(attrIndex)
+                                    If t.Columns.Contains(attrColName) Then
+                                        If String.IsNullOrEmpty(attr.Value) Then
+                                            row(attrColName) = System.DBNull.Value
+                                        Else
+                                            row(attrColName) = attr.Value.ToString()
+                                        End If
+                                    End If
+                                    attrIndex += 1
                                 End If
-                                attrIndex += 1
                             Next
-                            
+
                             t.Rows.Add(row)
                         Next
                     Next
